@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suavizar el dólar con la Transformada Z</title>
+<meta name="description" content="Media móvil contra suavizado exponencial sobre la cotización real del dólar blue: funciones de transferencia con la Transformada Z y retraso de cada filtro.">
+<link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+
+<header class="barra">
+  <a class="barra-marca" href="#inicio">Dólar y Transformada Z</a>
+  <nav class="barra-nav" aria-label="Secciones">
+    <a href="#filtros">Los filtros</a>
+    <a href="#transformada">H(z)</a>
+    <a href="#retraso">Retraso</a>
+    <a href="#salto">Salto</a>
+    <a href="#manual">A mano</a>
+    <a href="#conclusiones">Conclusiones</a>
+  </nav>
+  <form class="perillas" aria-label="Parámetros de los filtros" onsubmit="return false">
+    <label class="perilla perilla-mm">
+      <span>Media móvil, N = <output id="outN">5</output> días</span>
+      <input id="inN" type="range" min="2" max="20" step="1" value="5">
+    </label>
+    <label class="perilla perilla-exp">
+      <span>Exponencial, α = <output id="outA">0,333</output></span>
+      <input id="inA" type="range" min="0.05" max="1" step="0.005" value="0.333">
+    </label>
+    <label class="traba">
+      <input id="inTraba" type="checkbox" checked>
+      <span>Igualar el retraso: α = 2/(N+1)</span>
+    </label>
+  </form>
+</header>
+
+<main>
+
+<section id="inicio" class="portada">
+  <h1>Suavizar el dólar cuesta dos días de retraso</h1>
+  <p class="bajada">El blue sube y baja unos pesos todos los días. Un filtro digital deja ver la tendencia, pero la muestra tarde. Acá se comparan dos filtros sobre 75 días reales y se usa la Transformada Z para calcular cuánto se atrasa cada uno.</p>
+
+  <figure class="lienzo">
+    <div class="leyenda" aria-hidden="true">
+      <span class="ley ley-dato">Dólar blue, dato diario</span>
+      <span class="ley ley-mm">Media móvil</span>
+      <span class="ley ley-exp">Suavizado exponencial</span>
+    </div>
+    <div class="grafico-caja">
+      <svg id="grafSerie" role="img" aria-label="Cotización del dólar blue y salida de los dos filtros"></svg>
+      <div id="globo" class="globo" hidden></div>
+    </div>
+    <figcaption>Venta del dólar blue, días hábiles del 3 de agosto al 13 de noviembre de 2026. Mové N y α en la barra de arriba y pasá el cursor por el gráfico para leer los valores.</figcaption>
+  </figure>
+
+  <div class="tabla-caja">
+    <table class="comparacion" id="tablaComp">
+      <thead>
+        <tr><th scope="col"></th><th scope="col" class="col-mm">Media móvil</th><th scope="col" class="col-exp">Suavizado exponencial</th></tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row">Retraso medio, calculado con H(z)</th><td id="cRetMM"></td><td id="cRetExp"></td></tr>
+        <tr><th scope="row">Retraso medido en estos datos <small>Desplazamiento que mejor alinea la curva con el dato</small></th><td id="cMedMM"></td><td id="cMedExp"></td></tr>
+        <tr><th scope="row">Ruido que deja pasar</th><td id="cRuiMM"></td><td id="cRuiExp"></td></tr>
+        <tr><th scope="row">Variación diaria típica <small id="cVarDato"></small></th><td id="cVarMM"></td><td id="cVarExp"></td></tr>
+        <tr><th scope="row">Valores que guarda en memoria</th><td id="cMemMM"></td><td id="cMemExp"></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="filtros">
+  <h2>Dos maneras de promediar</h2>
+  <p class="texto">La cotización de cada día es una muestra <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo></mrow></semantics></math>. Un filtro la convierte en una salida <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo></mrow></semantics></math> más pareja. Los dos filtros más usados se diferencian en qué hacen con el pasado.</p>
+  <div class="dos">
+    <article class="filtro filtro-mm">
+      <h3>Media móvil</h3>
+      <p>Promedia los últimos N días y le da el mismo peso a cada uno. El día N+1 hacia atrás deja de contar de golpe.</p>
+      <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>y</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo><mo>=</mo><mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow></munderover><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo>−</mo><mi>k</mi><mo stretchy="false">]</mo></mrow></semantics></math></span>
+      <p class="nota">Sin realimentación: la salida depende solo de las entradas. Es un filtro FIR, de respuesta finita.</p>
+    </article>
+    <article class="filtro filtro-exp">
+      <h3>Suavizado exponencial</h3>
+      <p>Mezcla el dato de hoy con el resultado de ayer. Cada día que pasa, un dato viejo pesa una fracción menos, pero nunca desaparece del todo.</p>
+      <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>y</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo><mo>=</mo><mi>α</mi><mtext> </mtext><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo><mo>+</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>α</mi><mo stretchy="false">)</mo><mtext> </mtext><mi>y</mi><mo stretchy="false">[</mo><mi>n</mi><mo>−</mo><mn>1</mn><mo stretchy="false">]</mo></mrow></semantics></math></span>
+      <p class="nota">Con realimentación: la salida de ayer vuelve a entrar. Es un filtro IIR, de respuesta infinita.</p>
+    </article>
+  </div>
+</section>
+
+<section id="transformada">
+  <h2>De la ecuación a la función de transferencia</h2>
+  <p class="texto">La Transformada Z convierte una señal discreta en una función de <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi></mrow></semantics></math>. Su propiedad clave es que atrasar la señal k días equivale a multiplicar por <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>z</mi><mrow><mo>−</mo><mi>k</mi></mrow></msup></mrow></semantics></math>. Con eso, la receta de cada filtro pasa a ser una cuenta algebraica.</p>
+  <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>X</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mo>=</mo><munderover><mo>∑</mo><mrow><mi>n</mi><mo>=</mo><mn>0</mn></mrow><mi mathvariant="normal">∞</mi></munderover><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo><mtext> </mtext><msup><mi>z</mi><mrow><mo>−</mo><mi>n</mi></mrow></msup><mspace width="2em"/><mspace width="2em"/><mi mathvariant="script">Z</mi><mo stretchy="false">{</mo><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo>−</mo><mi>k</mi><mo stretchy="false">]</mo><mo stretchy="false">}</mo><mo>=</mo><msup><mi>z</mi><mrow><mo>−</mo><mi>k</mi></mrow></msup><mi>X</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow></semantics></math></span>
+
+  <div class="dos">
+    <article class="filtro filtro-mm">
+      <h3>Media móvil</h3>
+      <ol class="pasos">
+        <li>Se transforma cada término: <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo stretchy="false">[</mo><mi>n</mi><mo>−</mo><mi>k</mi><mo stretchy="false">]</mo></mrow></semantics></math> aporta <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>z</mi><mrow><mo>−</mo><mi>k</mi></mrow></msup><mi>X</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow></semantics></math>.
+          <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>Y</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mo>=</mo><mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow></munderover><msup><mi>z</mi><mrow><mo>−</mo><mi>k</mi></mrow></msup><mi>X</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow></semantics></math></span></li>
+        <li>Se divide por <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>X</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow></semantics></math> y se suma la serie geométrica.
+          <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>H</mi><mi>M</mi></msub><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mo>=</mo><mfrac><mrow><mi>Y</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow><mrow><mi>X</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow></mfrac><mo>=</mo><mfrac><mn>1</mn><mi>N</mi></mfrac><mo>⋅</mo><mfrac><mrow><mn>1</mn><mo>−</mo><msup><mi>z</mi><mrow><mo>−</mo><mi>N</mi></mrow></msup></mrow><mrow><mn>1</mn><mo>−</mo><msup><mi>z</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup></mrow></mfrac></mrow></semantics></math></span></li>
+        <li>Se evalúa en <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi><mo>=</mo><msup><mi>e</mi><mrow><mi>j</mi><mi>ω</mi></mrow></msup></mrow></semantics></math>: la fase es una recta, así que todas las frecuencias se atrasan lo mismo.
+          <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>τ</mi><mi>M</mi></msub><mo>=</mo><mfrac><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow><mn>2</mn></mfrac><mtext> </mtext><mrow><mtext>d</mtext><mover accent="true"><mtext>ı</mtext><mo>ˊ</mo></mover><mtext>as</mtext></mrow></mrow></semantics></math></span></li>
+      </ol>
+    </article>
+    <article class="filtro filtro-exp">
+      <h3>Suavizado exponencial</h3>
+      <ol class="pasos">
+        <li>Se transforma la ecuación; <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo stretchy="false">[</mo><mi>n</mi><mo>−</mo><mn>1</mn><mo stretchy="false">]</mo></mrow></semantics></math> aporta <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>z</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mi>Y</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow></semantics></math>.
+          <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>Y</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mo>=</mo><mi>α</mi><mi>X</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mo>+</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>α</mi><mo stretchy="false">)</mo><msup><mi>z</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mi>Y</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow></semantics></math></span></li>
+        <li>Se despeja <math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Y</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mi>X</mi><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo></mrow></semantics></math>.
+          <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>H</mi><mi>E</mi></msub><mo stretchy="false">(</mo><mi>z</mi><mo stretchy="false">)</mo><mo>=</mo><mfrac><mi>α</mi><mrow><mn>1</mn><mo>−</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>α</mi><mo stretchy="false">)</mo><msup><mi>z</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup></mrow></mfrac><mo>=</mo><mfrac><mrow><mi>α</mi><mi>z</mi></mrow><mrow><mi>z</mi><mo>−</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>α</mi><mo stretchy="false">)</mo></mrow></mfrac></mrow></semantics></math></span></li>
+        <li>Se deriva la fase: el retraso depende de la frecuencia. Para tendencias lentas vale
+          <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>τ</mi><mi>E</mi></msub><mo stretchy="false">(</mo><mn>0</mn><mo stretchy="false">)</mo><mo>=</mo><mfrac><mrow><mn>1</mn><mo>−</mo><mi>α</mi></mrow><mi>α</mi></mfrac><mtext> </mtext><mrow><mtext>d</mtext><mover accent="true"><mtext>ı</mtext><mo>ˊ</mo></mover><mtext>as</mtext></mrow></mrow></semantics></math></span></li>
+      </ol>
+    </article>
+  </div>
+
+  <h3 class="sub">Polos y ceros sobre el plano z</h3>
+  <p class="texto">Un filtro es estable si todos sus polos están dentro del círculo de radio 1. Los ceros sobre el círculo marcan las oscilaciones que el filtro elimina por completo.</p>
+  <div class="dos planos">
+    <figure>
+      <svg id="pzMM" role="img" aria-label="Polos y ceros de la media móvil"></svg>
+      <figcaption id="pzMMtxt"></figcaption>
+    </figure>
+    <figure>
+      <svg id="pzExp" role="img" aria-label="Polos y ceros del suavizado exponencial"></svg>
+      <figcaption id="pzExptxt"></figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="retraso">
+  <h2>Cuánto atenúa y cuánto retrasa cada uno</h2>
+  <p class="texto">Para comparar en igualdad de condiciones se elige α de modo que los dos filtros atrasen lo mismo ante tendencias lentas. Con esa elección también dejan pasar la misma cantidad de ruido.</p>
+  <span class="ecuacion"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow><mn>2</mn></mfrac><mo>=</mo><mfrac><mrow><mn>1</mn><mo>−</mo><mi>α</mi></mrow><mi>α</mi></mfrac><mspace width="1em"/><mo>⟹</mo><mspace width="1em"/><mi>α</mi><mo>=</mo><mfrac><mn>2</mn><mrow><mi>N</mi><mo>+</mo><mn>1</mn></mrow></mfrac></mrow></semantics></math></span>
+  <div class="dos">
+    <figure>
+      <svg id="grafGan" role="img" aria-label="Ganancia de cada filtro según el período de la oscilación"></svg>
+      <figcaption><strong>Cuánto deja pasar.</strong> 1 significa que la oscilación pasa entera; 0, que desaparece. La media móvil anula justo los ciclos de N días.</figcaption>
+    </figure>
+    <figure>
+      <svg id="grafRet" role="img" aria-label="Retardo de grupo de cada filtro según el período de la oscilación"></svg>
+      <figcaption><strong>Cuántos días atrasa.</strong> La media móvil atrasa siempre lo mismo. El exponencial atrasa menos cuanto más rápido es el movimiento.</figcaption>
+    </figure>
+  </div>
+  <p class="texto destacado" id="fraseRetraso"></p>
+</section>
+
+<section id="salto">
+  <h2>Si mañana el dólar salta $100</h2>
+  <p class="texto">La prueba más directa del retraso: el precio pasa de $1500 a $1600 de un día para el otro y se queda ahí. ¿Cuánto tarda cada filtro en mostrarlo?</p>
+  <div class="salto-caja">
+    <figure>
+      <svg id="grafSalto" role="img" aria-label="Respuesta de cada filtro a un salto de 100 pesos"></svg>
+    </figure>
+    <div class="salto-lado">
+      <button id="btnSalto" type="button" class="boton">Reproducir el salto</button>
+      <p id="saltoTxt" class="salto-txt" aria-live="polite"></p>
+    </div>
+  </div>
+</section>
+
+<section id="manual">
+  <h2>La cuenta a mano</h2>
+  <p class="texto">Los primeros ocho días, con N = 5 y α = 1/3, resueltos con calculadora y redondeando a dos decimales en cada paso. La media móvil recién existe el quinto día; después alcanza con sumar el dato nuevo y restar el que sale de la ventana.</p>
+  <div class="tabla-caja">
+    <table class="manual" id="tablaManual">
+      <thead><tr><th>n</th><th>Fecha</th><th>Dólar</th><th class="col-mm">Media móvil</th><th class="col-exp">Suavizado exponencial</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <h3 class="sub">Tres caminos, un resultado</h3>
+  <div class="tres">
+    <div><h4>A mano</h4><p>Ocho muestras en varios minutos. Obliga a entender de dónde sale H(z). Al octavo día el exponencial da $1541,03.</p></div>
+    <div><h4>Python</h4><p>Las 75 muestras al instante, verificadas contra <code>scipy.signal.lfilter</code> con diferencia cero. Al octavo día da $1541,02: el centavo de diferencia es el redondeo manual.</p></div>
+    <div><h4>Inteligencia artificial</h4><p>Llegó a las mismas H(z), al mismo retraso y a los mismos valores. Se aceptó porque coincide con las otras dos.</p></div>
+  </div>
+</section>
+
+<section id="conclusiones">
+  <h2>Qué queda</h2>
+  <ul class="cierre">
+    <li><strong>Suavizar siempre cuesta retraso</strong>, y con H(z) ese costo se calcula antes de aplicar el filtro: con N = 5 y α = 1/3, dos días en promedio y el 20 % de la varianza del ruido.</li>
+    <li><strong>La media móvil atrasa siempre igual</strong> y elimina por completo los ciclos de N días. Sirve cuando hay un patrón semanal que se quiere borrar.</li>
+    <li><strong>El exponencial reacciona antes</strong> a los cambios rápidos (un día medido sobre estos datos) y guarda un solo valor en memoria. Sirve para tableros en tiempo real.</li>
+    <li><strong>Ninguno predice.</strong> Un filtro causal describe lo que ya pasó; para eliminar el retraso haría falta conocer datos de días que todavía no ocurrieron.</li>
+  </ul>
+</section>
+
+</main>
+
+<footer class="pie">
+  <p><strong>Francisco Monzoni</strong>, Ingeniería en Sistemas de Información, UTN Facultad Regional San Francisco. Trabajo de Análisis Numérico, noviembre de 2026.</p>
+  <p>Datos: cotización de venta del dólar blue publicada por <a href="https://argentinadatos.com">ArgentinaDatos</a>. Código y análisis en Python: <a href="https://github.com/FranMonzoni/Trabajo-Analisis">github.com/FranMonzoni/Trabajo-Analisis</a>.</p>
+</footer>
+
+<script src="js/datos.js"></script>
+<script src="js/filtros.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
